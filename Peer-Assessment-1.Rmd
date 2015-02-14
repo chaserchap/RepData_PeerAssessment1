@@ -1,0 +1,156 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+## Loading and preprocessing the data
+
+The first step to any research is to load the necessary packages and the data 
+itself.
+
+```{r}
+    library(ggplot2)
+    activity <- read.csv("activity.csv")
+```
+
+## What is mean total number of steps taken per day?
+
+Next we'll determine our total steps for each day.
+
+```{r}
+    total <- tapply(activity$steps, activity$date, sum, na.rm=TRUE)
+    total
+```
+
+Not bad information, but a histogram would be easier to read.
+
+```{r}
+    hist(total)
+```
+
+We might like to see the mean and the median as well.
+
+```{r}
+    mean(total, na.rm=TRUE)
+    median(total, na.rm=TRUE)
+```
+
+## What is the average daily activity pattern?
+
+Now lets look at the intervals.  Specifically, the average number of steps taken
+per interval across all the days. We also want to put this into a data frame 
+that we can then use for our plot.
+
+```{r interval averages}
+steps <- tapply(activity$steps, as.factor(activity$interval), mean, na.rm = TRUE)
+steps <- as.vector(steps)
+intervals <- as.vector(unique(activity$interval))
+byint <- data.frame(steps, intervals)
+```
+
+Now we can create our time series plot!
+
+```{r time series plot}
+plot(byint$intervals, byint$steps, type = "l")
+```
+
+Clearly, more steps are taken in the morning, around lunchtime, and in the 
+evening. This makes sense with work schedules. But during what interval are the 
+most steps taken? Let's find out!
+
+```{r interval with max steps}
+byint$intervals[which.max(byint$steps)]
+```
+
+So, at 0835 the most steps, on average, were taken each day!
+
+## Imputing missing values
+
+Looking at the original data, there are a lot of NAs. How many, you ask?
+
+```{r number of NAs}
+sum(is.na(activity$steps))
+```
+
+2304 NAs! That's a lot. Let's fill in all the NAs. We'll use our average steps
+for all days of the given time interval to fill them in.
+
+```{r fill in NAs}
+activity.noNAs <- activity
+for(i in 1:nrow(activity.noNAs)){
+if(is.na(activity.noNAs$steps[i])){
+    activity.noNAs$steps[i] = byint$steps[which(byint$intervals == 
+                                                    activity.noNAs$interval[i])]
+}}
+```
+
+Excellent, now that all our NAs are filled in, we're ready to graph a new 
+histogram!
+
+```{r new histogram}
+total.noNAs <- tapply(activity.noNAs$steps, activity.noNAs$date, sum)
+hist(total.noNAs)   
+```
+
+Interesting...
+Let's take a look at the mean and median.
+
+```{r mean median no NAs}
+mean(total.noNAs)
+median(total.noNAs)
+```
+
+Well now, that's interesting! Our histogram has a distribution that more closely
+resembles a bell curve! Also, by imputing the NAs we have increased both our 
+mean and median. As a matter of fact, the median and the mean are now the same
+number! 
+
+What does that tell us? I'd say that the majority of the NAs were from times 
+when one could expect to have walked more!
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+Our final task is to look at weekdays versus weekends.
+
+Let's add a factor to denote which days are weekends and which are weekdays.
+
+```{r daytype}
+for(i in 1:nrow(activity.noNAs)){
+    activity.noNAs$daytype[i] <- 
+        ifelse(weekdays(as.Date(activity.noNAs$date[i])) 
+               %in% c("Saturday","Sunday"), "Weekend","Weekday")
+}
+```
+
+Now we want to look at plots of average steps per day with respect to weekends
+and weekdays.
+
+First we'll split up our weekend averages and our weekday averages and put them
+into a data frame with our intervals
+
+```{r daytype dataframe}
+byday <- tapply(activity.noNAs$steps, list(activity.noNAs$interval, 
+            activity.noNAs$daytype), mean)
+byday <- as.data.frame(byday)
+byday$interval <- unique(activity.noNAs$interval)
+final <- append(byday$Weekend, byday$Weekday)
+final <- as.data.frame(final)
+final$intervals <- append(byday$interval, byday$interval)
+colnames(final) <- c("Steps","Intervals")
+for(i in 1:nrow(final)){
+    final$DayType[i] <- ifelse(i <= 288, "Weekend", "Weekday")
+}
+```
+
+Now we can easily graph our results.
+
+```{r final graph}
+library(lattice)
+xyplot(Steps ~ Intervals | as.factor(DayType), data = final, type = "l", 
+       layout = c(1,2), ylab = "Number of Steps")
+```
+
+As we can see, more steps are taken during Weekday mornings, whereas on Weekends
+the number of steps taken throughout the day is more varied.
